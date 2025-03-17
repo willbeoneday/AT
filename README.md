@@ -1,100 +1,97 @@
-# ATS App
+require('dotenv').config();
+const express = require('express');
+const multer = require('multer');
+const cors = require('cors');
+const { v4: uuidv4 } = require('uuid');
+const mongoose = require('mongoose');
 
-This project is an Applicant Tracking System (ATS) that allows users to post job listings, apply for jobs, and manage candidates.
+const app = express();
+const PORT = process.env.PORT || 5000;
 
-## Project Structure
+app.use(cors());
+app.use(express.json());
 
-```plaintext
-ats-app/
-├── backend/
-│   ├── index.js
-│   ├── package.json
-│   └── uploads/
-├── frontend/
-│   ├── public/
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── JobForm.js
-│   │   │   ├── JobList.js
-│   │   │   ├── ApplicationForm.js
-│   │   │   ├── CandidateList.js
-│   │   ├── App.css
-│   │   ├── App.js
-│   │   ├── index.css
-│   │   ├── index.js
-│   └── package.json
-├── database/
-│   └── database.json
-```
+mongoose.connect(process.env.MONGO_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+});
 
-## Features
+const candidateSchema = new mongoose.Schema({
+  id: String,
+  name: String,
+  email: String,
+  phone: String,
+  resumePath: String,
+  jobId: String,
+  status: String,
+});
 
-- **Job Postings**: Create, list, and manage job postings.
-- **Job Applications**: Apply for jobs with resume uploads.
-- **Candidate Management**: List and manage candidates.
+const jobSchema = new mongoose.Schema({
+  id: String,
+  title: String,
+  description: String,
+});
 
-## Setup Instructions
+const Candidate = mongoose.model('Candidate', candidateSchema);
+const Job = mongoose.model('Job', jobSchema);
 
-### Backend
+const upload = multer({ dest: 'uploads/' });
 
-1. **Navigate to the backend directory**:
-   ```bash
-   cd backend
-   ```
+app.post('/jobs', async (req, res) => {
+  try {
+    const { title, description } = req.body;
+    const job = new Job({
+      id: uuidv4(),
+      title,
+      description,
+    });
+    await job.save();
+    res.json({ message: 'Job posted!', job });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to post job' });
+  }
+});
 
-2. **Install dependencies**:
-   ```bash
-   npm install
-   ```
+app.get('/jobs', async (req, res) => {
+  try {
+    const jobs = await Job.find();
+    res.json(jobs);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch jobs' });
+  }
+});
 
-3. **Start the backend server**:
-   ```bash
-   npm start
-   ```
+app.post('/apply', upload.single('resume'), async (req, res) => {
+  try {
+    const { name, email, phone, jobId } = req.body;
+    const resumePath = req.file.path;
 
-### Frontend
+    const candidate = new Candidate({
+      id: uuidv4(),
+      name,
+      email,
+      phone,
+      resumePath,
+      jobId,
+      status: 'Applied',
+    });
 
-1. **Navigate to the frontend directory**:
-   ```bash
-   cd frontend
-   ```
+    await candidate.save();
+    res.json({ message: 'Application received!', candidate });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to apply for job' });
+  }
+});
 
-2. **Install dependencies**:
-   ```bash
-   npm install
-   ```
+app.get('/candidates', async (req, res) => {
+  try {
+    const candidates = await Candidate.find();
+    res.json(candidates);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch candidates' });
+  }
+});
 
-3. **Start the frontend development server**:
-   ```bash
-   npm start
-   ```
-
-### Database
-
-The database is currently a simple JSON file located at `database/database.json`. You can replace this with a real database like MongoDB or PostgreSQL in the future.
-
-## Usage
-
-1. **Open the frontend**:
-   Open `http://localhost:3000` in your web browser.
-
-2. **Create Job Posts**:
-   - Navigate to the "Create Job Post" section.
-   - Fill in the job title and description.
-   - Click "Create Job".
-
-3. **Apply for Jobs**:
-   - Navigate to the "Apply for a Job" section.
-   - Fill in the applicant details and select a resume file.
-   - Click "Apply".
-
-4. **Manage Candidates**:
-   - Navigate to the "Candidate Listings" section to view all candidates.
-
-## Contributing
-
-Feel free to fork this repository and submit pull requests. Contributions are welcome!
-
-## License
-
-This project is licensed under the MIT License.
+app.listen(PORT, () => {
+  console.log(`ATS backend running on http://localhost:${PORT}`);
+});
